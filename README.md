@@ -1,4 +1,4 @@
-# CLI for the W3C validtor
+# CLI for the W3C validator
 
 Command line interface for recursively validating websites with the W3C validator
 
