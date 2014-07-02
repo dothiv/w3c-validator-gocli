@@ -8,10 +8,10 @@ This could be handy if you are testing private webpages, or want to integrate th
 
 Have a W3C validator instance ready, e.g. by using this docker file: [dockerhtml5validator](https://github.com/magnetikonline/dockerhtml5validator).
 
-### Iustall
+### Install
 
-    $ go install https://github.com/dothiv/w3c-validator-gocli/cli
+    go install https://github.com/dothiv/w3c-validator-gocli/cli
     
 ### Use
 
-    $ $GOPATH/bin/w3c-validator-gocli -validator="http://localhost:8080/check" -url="http://google.com/"
+    $GOPATH/bin/w3c-validator-gocli -validator="http://localhost:8080/check" -url="http://google.com/"
