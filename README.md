@@ -10,7 +10,7 @@ Have a W3C validator instance ready, e.g. by using this docker file: [dockerhtml
 
 ### Install
 
-    go install https://github.com/dothiv/w3c-validator-gocli/cli
+    go get github.com/dothiv/w3c-validator-gocli/w3c-validator-gocli
     
 ### Use
 
