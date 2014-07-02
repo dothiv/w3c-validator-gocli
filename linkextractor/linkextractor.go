@@ -22,6 +22,7 @@ func GetLinks(source []byte, url *neturl.URL) (links []neturl.URL) {
 		if linkUrlErr != nil {
 			os.Stderr.WriteString(linkUrlErr.Error())
 		} else {
+			linkUrl.Fragment = "" // Do not follow fragments
 			links = append(links, *linkUrl)
 		}
 	}
