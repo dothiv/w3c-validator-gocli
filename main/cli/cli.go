@@ -21,7 +21,80 @@ import (
 	"strings"
 )
 
-func checkUrl(url *neturl.URL, validator *neturl.URL) (fetchContents []byte, checkErr error) {
+func main() {
+	url := flag.String("url", "", "URL to start validation of")
+	validator := flag.String("validator", "http://localhost:8080/check", "W3C validation service")
+	ignore_status := flag.String("ignore-status", "0", "Accept status codes other than 200")
+	print_message := flag.String("print-message", "0", "Print validation message")
+	flag.Parse()
+
+	if len(*url) == 0 {
+		os.Stderr.WriteString("url is required\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if len(*validator) == 0 {
+		os.Stderr.WriteString("validator service is required\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	pageUrl, pageUrlErr := neturl.Parse(*url)
+	if pageUrlErr != nil {
+		os.Stderr.WriteString(pageUrlErr.Error())
+		os.Exit(1)
+	}
+
+	validatorUrl, validatorUrlErr := neturl.Parse(*validator)
+	if validatorUrlErr != nil {
+		os.Stderr.WriteString(validatorUrlErr.Error())
+		os.Exit(1)
+	}
+
+	os.Stdout.WriteString(fmt.Sprintf("Using %s ...\n", *validator))
+
+	checkedUrls := make(map[string]bool)
+
+	checkStatusCode := true
+	if *ignore_status != "0" {
+		checkStatusCode = false
+	}
+
+	printMessage := false
+	if *print_message != "0" {
+		printMessage = true
+	}
+
+	recursiveCheck(pageUrl, pageUrl, validatorUrl, checkedUrls, checkStatusCode, printMessage)
+	return
+}
+
+/**
+ * Recursively check a page and linked sub pages of the same domain.
+ */
+func recursiveCheck(pageUrl *neturl.URL, startUrl *neturl.URL, validator *neturl.URL, checkedUrls map[string]bool, checkStatusCode bool, printMessage bool) {
+	pageSource, err := checkUrl(pageUrl, validator, checkStatusCode, printMessage)
+	if err != nil {
+		os.Stderr.WriteString(fmt.Sprintf("[ERROR] %s\n", pageUrl))
+		os.Stderr.WriteString(fmt.Sprintf("%s\n", err.Error()))
+		checkedUrls[pageUrl.String()] = false
+	} else {
+		os.Stdout.WriteString(fmt.Sprintf("[OK] %s\n", pageUrl))
+		checkedUrls[pageUrl.String()] = true
+	}
+	links := getLinks(pageSource, startUrl)
+	for _, link := range links {
+		if _, checked := checkedUrls[link.String()]; !checked {
+			recursiveCheck(&link, startUrl, validator, checkedUrls, checkStatusCode, printMessage)
+		}
+	}
+}
+
+/**
+ * Checks the validity of a document by fetching it and sending to the validator instance.
+ */
+func checkUrl(url *neturl.URL, validator *neturl.URL, checkStatusCode bool, printMessage bool) (fetchContents []byte, checkErr error) {
 	// Check URLs content type
 	var headResponse *http.Response
 	headResponse, checkErr = http.Head(url.String())
@@ -33,7 +106,7 @@ func checkUrl(url *neturl.URL, validator *neturl.URL) (fetchContents []byte, che
 		checkErr = fmt.Errorf("%s not supported", contentType)
 		return
 	}
-	if headResponse.StatusCode != 200 {
+	if checkStatusCode && headResponse.StatusCode != 200 {
 		checkErr = fmt.Errorf("Status %d!", headResponse.StatusCode)
 		return
 	}
@@ -102,72 +175,17 @@ func checkUrl(url *neturl.URL, validator *neturl.URL) (fetchContents []byte, che
 	status := postResponse.Header.Get("X-W3C-Validator-Status")
 	if status != "Valid" {
 		checkErr = fmt.Errorf("%s!", status)
-		/*
-			var validatorContents []byte
-			validatorContents, checkErr = ioutil.ReadAll(postResponse.Body)
-			if checkErr != nil {
+		if printMessage {
+			validatorContents, responseReadErr := ioutil.ReadAll(postResponse.Body)
+			if responseReadErr != nil {
 				return
-
 			}
-			os.Stdout.Write(validatorContents)
-		*/
-	}
-	return
-}
-
-func main() {
-	url := flag.String("url", "", "URL to start validation of")
-	validator := flag.String("validator", "http://localhost:8080/check", "W3C validation service")
-	flag.Parse()
-
-	if len(*url) == 0 {
-		os.Stderr.WriteString("url is required\n")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	if len(*validator) == 0 {
-		os.Stderr.WriteString("validator service is required\n")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	pageUrl, pageUrlErr := neturl.Parse(*url)
-	if pageUrlErr != nil {
-		os.Stderr.WriteString(pageUrlErr.Error())
-		os.Exit(1)
-	}
-
-	validatorUrl, validatorUrlErr := neturl.Parse(*validator)
-	if validatorUrlErr != nil {
-		os.Stderr.WriteString(validatorUrlErr.Error())
-		os.Exit(1)
-	}
-
-	os.Stdout.WriteString(fmt.Sprintf("Using %s ...\n", *validator))
-
-	checkedUrls := make(map[string]bool)
-
-	recursiveCheck(pageUrl, pageUrl, validatorUrl, checkedUrls)
-	return
-}
-
-func recursiveCheck(pageUrl *neturl.URL, startUrl *neturl.URL, validator *neturl.URL, checkedUrls map[string]bool) {
-	pageSource, err := checkUrl(pageUrl, validator)
-	if err != nil {
-		os.Stderr.WriteString(fmt.Sprintf("[ERROR] %s\n", pageUrl))
-		os.Stderr.WriteString(fmt.Sprintf("%s\n", err.Error()))
-		checkedUrls[pageUrl.String()] = false
-	} else {
-		os.Stdout.WriteString(fmt.Sprintf("[OK] %s\n", pageUrl))
-		checkedUrls[pageUrl.String()] = true
-	}
-	links := getLinks(pageSource, startUrl)
-	for _, link := range links {
-		if _, checked := checkedUrls[link.String()]; !checked {
-			recursiveCheck(&link, startUrl, validator, checkedUrls)
+			os.Stderr.Write(validatorContents)
+			os.Stderr.WriteString("\n")
 		}
+		return
 	}
+	return
 }
 
 var HYPERLINK = regexp.MustCompile(`<a[^>]+href="([^"]+)"`)
